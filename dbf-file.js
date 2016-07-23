@@ -6,12 +6,13 @@ var _ = require('lodash');
 var moment = require('moment');
 var MemoFile = require('memo_file');
 var asyncawait_1 = require('asyncawait');
+var pfad = require('path');
 // For information about the dBase III file format, see:
 // http://www.dbf2002.com/dbf-file-format.html
 // http://www.dbase.com/KnowledgeBase/int/db7_file_fmt.htm
 /** Open an existing DBF file. */
-function open(path, encoding, memoPath) {
-    return openDBF(path, encoding, memoPath);
+function open(path, encoding) {
+    return openDBF(path, encoding);
 }
 exports.open = open;
 /** Create a new DBF file with no records. */
@@ -19,6 +20,13 @@ function create(path, fields) {
     return createDBF(path, fields);
 }
 exports.create = create;
+
+var matchingMemoFilePath = function(path){
+    var extname =  pfad.extname(path);
+
+    return path.replace(extname, '.fpt')
+};
+
 /** Represents a DBF file. */
 var DBFFile = (function () {
     function DBFFile() {
@@ -44,10 +52,9 @@ var DBFFile = (function () {
 }());
 exports.DBFFile = DBFFile;
 //-------------------- Private implementation starts here --------------------
-var openDBF = asyncawait_1.async(function (path, encoding, memoPath) {
+var openDBF = asyncawait_1.async(function (path, encoding) {
 
     try {
-        console.log(memoPath);
         console.log(path);
         // Open the file and create a buffer to read through.
         var fd = asyncawait_1.await(fs.openAsync(path, 'r'));
@@ -94,8 +101,11 @@ var openDBF = asyncawait_1.async(function (path, encoding, memoPath) {
             result.encoding = encoding;
         }
 
-        if (memoPath) {
-            result.memoFile = new MemoFile(memoPath, result.encoding);
+        var fieldTypes = result.fields.map((field) => (field.type));
+        var includesMemoField = _.includes(fieldTypes, 'M');
+
+        if (includesMemoField) {
+            result.memoFile = new MemoFile(matchingMemoFilePath(path), result.encoding);
         }
         return result;
     }
@@ -278,7 +288,7 @@ var readRecordsFromDBF = asyncawait_1.async(function (dbf, maxRows) {
             currentPosition += recordLength * rowsToRead;
             // Parse each row.
             for (var i = 0, offset = 0; i < rowsToRead; ++i) {
-                var row = { _raw: {} };
+                var row = { };
                 var isDeleted = (buffer[offset++] === 0x2a);
                 if (isDeleted) {
                     offset += recordLength - 1;
@@ -289,7 +299,7 @@ var readRecordsFromDBF = asyncawait_1.async(function (dbf, maxRows) {
                     var field = dbf.fields[j];
                     var len = field.size, value = null;
                     // Keep raw buffer data for each field value.
-                    row._raw[field.name] = buffer.slice(offset, offset + field.size);
+                    //row._raw[field.name] = buffer.slice(offset, offset + field.size);
                     // Decode the field from the buffer, according to its type.
                     switch (field.type) {
                         case 'C':
