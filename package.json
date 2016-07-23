@@ -1,6 +1,6 @@
 {
   "name": "dbffile",
-  "version": "0.2",
+  "version": "0.2.0",
   "description": "",
   "main": "dbf-file.js",
   "scripts": {
