@@ -29,6 +29,7 @@
     "asyncawait": "^1.0.3",
     "bluebird": "^3.3.4",
     "lodash": "^4.6.1",
+    "memo_file": "^1.0.0",
     "moment": "^2.12.0"
   },
   "devDependencies": {
