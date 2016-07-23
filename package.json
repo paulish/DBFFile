@@ -5,11 +5,7 @@
   "main": "built/dbf-file.js",
   "typings": "built/dbf-file.d.ts",
   "scripts": {
-    "build": "tsc -p src && tsc -p test && ncp test/fixtures built/test/fixtures",
-    "clean": "rimraf built/",
-    "prepublish": "npm run self-ref && npm run build",
-    "test": "node ./scripts/run-tests",
-    "self-ref": "node ./scripts/enable-self-reference"
+    "test": "mocha"
   },
   "repository": {
     "type": "git",
