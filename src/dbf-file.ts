@@ -101,7 +101,7 @@ var openDBF = async ((path: string): DBFFile => {
         var recordLength = buffer.readInt16LE(10);
 
         // Ensure the file version is a supported one.
-        assert(fileVersion === 0x03, `File '${path}' has unknown/unsupported dBase version: ${fileVersion}.`);
+        //assert(fileVersion === 0x03, `File '${path}' has unknown/unsupported dBase version: ${fileVersion}.`);
 
         // Parse all field descriptors.
         var fields: Field[] = [];
