@@ -105,6 +105,7 @@ var openDBF = asyncawait_1.async(function (path, encoding) {
         var includesMemoField = _.includes(fieldTypes, 'M');
 
         if (includesMemoField) {
+            console.log("DBF file has associated Memo-File");
             result.memoFile = new MemoFile(matchingMemoFilePath(path), result.encoding);
         }
         return result;
