@@ -1,4 +1,11 @@
-# DBFFile
+# Additions to DBFFile
+
+- Read FoxPro DBF Files
+- Support M-Fields, Read from the associated Memo-File
+- Specify Encoding utf-8, base64 etc.
+
+
+# Forked DBFFile
 
 ### Summary
 
