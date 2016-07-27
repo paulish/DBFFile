@@ -314,7 +314,7 @@ var readRecordsFromDBF = asyncawait_1.async(function (dbf, maxRows) {
                             while (len > 0 && buffer[offset] === 0x20)
                                 ++offset, --len;
                             value = len > 0 ? parseFloat(substr(offset, len)) : null;
-                            if(field.type == 'M'){
+                            if(field.type == 'M' && !isNaN(value)){
                                 value = dbf.memoFile.getBlockContentAt(value);
                             }
                             offset += len;
