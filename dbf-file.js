@@ -7,6 +7,7 @@ var moment = require('moment');
 var MemoFile = require('memo_file');
 var asyncawait_1 = require('asyncawait');
 var pfad = require('path');
+var iconv = require('iconv-lite');
 // For information about the dBase III file format, see:
 // http://www.dbf2002.com/dbf-file-format.html
 // http://www.dbase.com/KnowledgeBase/int/db7_file_fmt.htm
@@ -270,7 +271,7 @@ var readRecordsFromDBF = asyncawait_1.async(function (dbf, maxRows) {
         var currentPosition = dbf._headerLength + recordLength * dbf._recordsRead;
         // Create a convenience function for extracting strings from the buffer.
         var substr = function (start, count) { return buffer.toString("utf8", start, start + count); };
-        var encodingSubstr = function(start, count) {return buffer.toString(dbf.encoding, start, start + count); };
+        var encodingSubstr = function(start, count) {return iconv.decode(buffer.slice(start, start + count), dbf.encoding); };
         // Read rows in chunks, until enough rows have been read.
         var rows = [];
         while (true) {
