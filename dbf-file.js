@@ -17,8 +17,8 @@ function open(path, encoding) {
 }
 exports.open = open;
 /** Create a new DBF file with no records. */
-function create(path, fields) {
-    return createDBF(path, fields);
+function create(path, fields, languageDriverId) {
+    return createDBF(path, fields, languageDriverId || 0);
 }
 exports.create = create;
 
@@ -41,8 +41,8 @@ var DBFFile = (function () {
         this.encoding = "utf8";
     }
     /** Append the specified records to this DBF file. */
-    DBFFile.prototype.append = function (records) {
-        return appendToDBF(this, records);
+    DBFFile.prototype.append = function (records, skipValidation) {
+        return appendToDBF(this, records, skipValidation);
     };
     /** Read a subset of records from this DBF file. */
     DBFFile.prototype.readRecords = function (maxRows) {
@@ -62,10 +62,11 @@ var openDBF = asyncawait_1.async(function (path, encoding) {
         var buffer = new Buffer(32);
         // Read various properties from the header record.
         asyncawait_1.await(fs.readAsync(fd, buffer, 0, 32, 0));
-        var fileVersion = buffer.readInt8(0);
-        var recordCount = buffer.readInt32LE(4);
-        var headerLength = buffer.readInt16LE(8);
-        var recordLength = buffer.readInt16LE(10);
+        var fileVersion = buffer.readInt8(0x00);
+        var recordCount = buffer.readInt32LE(0x04);
+        var headerLength = buffer.readInt16LE(0x08);
+        var recordLength = buffer.readInt16LE(0x0A);
+        var languageDriverId = buffer.readInt8(0x1D);
         // Ensure the file version is a supported one.
         //assert(fileVersion === 0x03, `File '${path}' has unknown/unsupported dBase version: ${fileVersion}.`);
         // Parse all field descriptors.
@@ -91,8 +92,9 @@ var openDBF = asyncawait_1.async(function (path, encoding) {
         // Return a new DBFFile instance.
         var result = new DBFFile();
         result.path = path;
-        result.recordCount = recordCount;
+        result.recordCount = recordCount;        
         result.fields = fields;
+        result.languageDriverId = languageDriverId;
         result._recordsRead = 0;
         result._headerLength = headerLength;
         result._recordLength = recordLength;
@@ -117,7 +119,7 @@ var openDBF = asyncawait_1.async(function (path, encoding) {
             asyncawait_1.await(fs.closeAsync(fd));
     }
 });
-var createDBF = asyncawait_1.async(function (path, fields) {
+var createDBF = asyncawait_1.async(function (path, fields, languageDriverId) {
     try {
         // Validate the field metadata.
         validateFields(fields);
@@ -131,7 +133,7 @@ var createDBF = asyncawait_1.async(function (path, fields) {
         buffer.writeUInt8(now.getMonth(), 0x02); // MM
         buffer.writeUInt8(now.getDate(), 0x03); // DD
         buffer.writeInt32LE(0, 0x04); // Number of records (set to zero)
-        var headerLength = 34 + (fields.length * 32);
+        var headerLength = 32 + (fields.length * 32) + 1;
         buffer.writeUInt16LE(headerLength, 0x08); // Length of header structure
         var recordLength = calcRecordLength(fields);
         buffer.writeUInt16LE(recordLength, 0x0A); // Length of each record
@@ -139,9 +141,12 @@ var createDBF = asyncawait_1.async(function (path, fields) {
         buffer.writeUInt32LE(0, 0x10); // Reserved/unused (set to zero)
         buffer.writeUInt32LE(0, 0x14); // Reserved/unused (set to zero)
         buffer.writeUInt32LE(0, 0x18); // Reserved/unused (set to zero)
-        buffer.writeUInt32LE(0, 0x1C); // Reserved/unused (set to zero)
+        buffer.writeUInt8(0, 0x1C);    // MDX flag (set to zero)
+        buffer.writeUInt8(languageDriverId || 0, 0x1D);
+        buffer.writeUInt16LE(0, 0x1E); // Reserved/unused (set to zero)
         asyncawait_1.await(fs.writeAsync(fd, buffer, 0, 32, 0));
         // Write the field descriptors.
+        var address = 1;
         for (var i = 0; i < fields.length; ++i) {
             var name = fields[i].name, type = fields[i].type, size = fields[i].size, decs = fields[i].decs || 0;
             buffer.write(name, 0, name.length, 'utf8'); // Field name (up to 10 chars)
@@ -149,7 +154,7 @@ var createDBF = asyncawait_1.async(function (path, fields) {
                 buffer.writeUInt8(0, j);
             }
             buffer.writeUInt8(type.charCodeAt(0), 0x0B); // Field type
-            buffer.writeUInt32LE(0, 0x0C); // Field data address (set to zero)
+            buffer.writeUInt32LE(address, 0x0C); // Field data address
             buffer.writeUInt8(size, 0x10); // Field length
             buffer.writeUInt8(decs, 0x11); // Decimal count
             buffer.writeUInt16LE(0, 0x12); // Reserved (set to zero)
@@ -159,6 +164,7 @@ var createDBF = asyncawait_1.async(function (path, fields) {
             buffer.writeUInt32LE(0, 0x18); // Reserved (set to zero)
             buffer.writeUInt32LE(0, 0x1C); // Reserved (set to zero)
             buffer.writeUInt8(0, 0x1F); // Index field flag (set to zero)
+            address += size;
             asyncawait_1.await(fs.writeAsync(fd, buffer, 0, 32, 32 + i * 32));
         }
         // Write the header terminator and EOF marker.
@@ -171,9 +177,10 @@ var createDBF = asyncawait_1.async(function (path, fields) {
         result.path = path;
         result.recordCount = 0;
         result.fields = _.cloneDeep(fields);
+        result.languageDriverId = languageDriverId;
         result._recordsRead = 0;
         result._headerLength = headerLength;
-        result._recordLength = recordLength;
+        result._recordLength = recordLength;        
         return result;
     }
     finally {
@@ -182,7 +189,7 @@ var createDBF = asyncawait_1.async(function (path, fields) {
             asyncawait_1.await(fs.closeAsync(fd));
     }
 });
-var appendToDBF = asyncawait_1.async(function (dbf, records) {
+var appendToDBF = asyncawait_1.async(function (dbf, records, skipValidation) {
     try {
         // Open the file and create a buffer to read and write through.
         var fd = asyncawait_1.await(fs.openAsync(dbf.path, 'r+'));
@@ -194,7 +201,7 @@ var appendToDBF = asyncawait_1.async(function (dbf, records) {
         for (var i = 0; i < records.length; ++i) {
             // Write one record.
             var record = records[i];
-            validateRecord(dbf.fields, record);
+            if (!skipValidation) validateRecord(dbf.fields, record);
             var offset = 0;
             buffer.writeUInt8(0x20, offset++); // Record deleted flag
             // Write each field in the record.
@@ -214,12 +221,17 @@ var appendToDBF = asyncawait_1.async(function (dbf, records) {
                 // Encode the field in the buffer, according to its type.
                 switch (field.type) {
                     case 'C':
-                        for (var k = 0; k < field.size; ++k) {
-                            //TEMP testing... treat string as octets, not utf8/ascii
-                            //var byte = k < value.length ? value[k] : 0x20;
-                            var byte = k < value.length ? value.charCodeAt(k) : 0x20;
-                            buffer.writeUInt8(byte, offset++);
-                        }
+                        value = dbf.encoding === 'utf8' ? Buffer.from(value, dbf.encoding) : iconv.encode(value, dbf.encoding);
+                        if (value.length <= field.size) {
+                            value.copy(buffer, offset);
+                            offset += value.length;
+                            for (var k = value.length; k < field.size; ++k) {                                
+                                buffer.writeUInt8(0x20, offset++);
+                            }
+                        } else {
+                            value.copy(buffer.slice(0, field.size), offset);
+                            offset += field.size;
+                        }                        
                         break;
                     case 'N':
                         value = value.toString();
